@@ -1,6 +1,5 @@
 import asyncio
 import collections
-from asyncio import Future
 
 
 class Fuse:

@@ -1,12 +1,7 @@
 import asyncio
-import itertools
-import statistics
-import time
 from asyncio import Task
-from datetime import datetime, timedelta
-from typing import *
-
-import math
+from datetime import timedelta
+from typing import ParamSpec, AsyncIterator, Callable, Generator
 
 from asynkets.pulse import Pulse
 from asynkets.utils import ensure_coroutine_function

@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import *
+from typing import (
+    ParamSpec,
+    reveal_type,
+    cast,
+    TypeVar,
+    TYPE_CHECKING,
+    Coroutine,
+    overload,
+    Callable,
+)
 
 _T = TypeVar("_T")
 _T_co = TypeVar("_T_co", covariant=True)
