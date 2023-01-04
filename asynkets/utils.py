@@ -4,7 +4,6 @@ import asyncio
 import functools
 from typing import (
     ParamSpec,
-    reveal_type,
     cast,
     TypeVar,
     TYPE_CHECKING,

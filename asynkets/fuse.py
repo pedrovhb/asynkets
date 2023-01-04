@@ -6,7 +6,7 @@ class Fuse:
     """Similar to asyncio.Event, but can only be set once."""
 
     def __init__(self) -> None:
-        self._waiters = collections.deque()
+        self._waiters: collections.deque[asyncio.Future[bool]] = collections.deque()
         self._value = False
 
     def set(self) -> None:

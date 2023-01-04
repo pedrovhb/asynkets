@@ -1,25 +1,86 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio import Future
+import inspect
+from asyncio import Future, Event
 from collections import deque
+from collections.abc import AsyncGenerator
 from datetime import timedelta
-from typing import Generator, AsyncIterator
+from functools import partial
+from typing import Generator, AsyncIterator, Callable, cast, Coroutine, ParamSpec
+
+from asynkets import Fuse
+from asynkets._sentinel import NoValue, NoValueT
+
+_P = ParamSpec("_P")
+
+
+class PulseStopped(Exception):
+    """Raised when a pulse is stopped."""
 
 
 class _BasePulse:
-    """A pulse that can be triggered and waited for.
-
-    Waiting for a pulse will block until the pulse is triggered, and will return
-    the time at which the pulse was triggered. Alternatively, the pulse can be given
-    a function to call when it is triggered. In this case, the return value of waiting
-    on the pulse will be the result of calling the function.
-    """
-
     def __init__(self) -> None:
-        self._waiters = deque()
+        self._waiters: deque[Future[float]] = deque()
         self._value: float | None = None
         self._loop = asyncio.get_event_loop()
+        self._stopped = Fuse()
+        self._pulse_callbacks: list[Callable[[float], object] | Callable[[], object]] = []
+
+    def add_pulse_callback(
+        self,
+        callback: Callable[_P, object],
+        thread_safe: bool = False,
+    ) -> None:
+        """Add a callback to be called when the pulse is fired.
+
+        If it is a coroutine, it will be scheduled as a task; otherwise, it will be scheduled
+        via the event loop's call_soon method if thread_safe is False, or via call_soon_threadsafe
+        if thread_safe is True.
+
+        No arguments are passed to the callback. If you need to pass arguments, use
+        functools.partial.
+        """
+
+        if asyncio.iscoroutinefunction(callback):
+            _fn = cast(Callable[[], Coroutine[object, object, object]], callback)
+
+            def _cb() -> None:
+                asyncio.create_task(_fn())
+
+        elif thread_safe:
+
+            def _cb() -> None:
+                self._loop.call_soon_threadsafe(callback)
+
+        else:
+
+            def _cb() -> None:
+                self._loop.call_soon(callback)
+
+        self._pulse_callbacks.append(_cb)
+
+    def _run_callbacks(self) -> None:
+        for cb in self._pulse_callbacks:
+            self._loop.call_soon(cb)
+
+    @property
+    def is_stopped(self) -> bool:
+        """Whether the pulse has been stopped."""
+        return self._stopped.is_set()
+
+    def stop(self) -> None:
+        """Stop the pulse, waking up all waiters.
+
+        The resulting future will be resolved with the event loop time.
+        """
+        self._stopped.set()
+        for fut in self._waiters:
+            fut.set_exception(PulseStopped())
+
+    async def wait_closed(self) -> None:
+        """Wait for the pulse to be closed."""
+        await self._stopped.wait()
 
     def wait(self) -> Future[float]:
         """Wait for the pulse to be fired.
@@ -40,9 +101,15 @@ class _BasePulse:
 
     async def _aiter(self) -> AsyncIterator[float]:
         while True:
-            yield await self
+            try:
+                yield await self
+            except PulseStopped:
+                print("Stopped")
+                break
 
     def __aiter__(self) -> AsyncIterator[float]:
+        # ait = self._aiter()
+        # asyncio.create_task(self._stopped.wait()).add_done_callback(lambda _: ait.aclose())
         return self._aiter()
 
     def _fire(self) -> None:
@@ -50,28 +117,97 @@ class _BasePulse:
 
         The resulting future will be resolved with the event loop time.
         """
+        if self._stopped.is_set():
+            raise RuntimeError("Cannot fire a stopped pulse")
+
         self._value = self._loop.time()
         for fut in self._waiters:
             fut.set_result(self._value)
         self._waiters.clear()
 
+        self._run_callbacks()
+
 
 class Pulse(_BasePulse):
+    """A pulse that can be triggered and waited for.
+
+    Waiting for a pulse will block until the pulse is triggered, and will return
+    the time at which the pulse was triggered. Alternatively, the pulse can be given
+    a function to call when it is triggered. In this case, the return value of waiting
+    on the pulse will be the result of calling the function.
+    """
+
     fire = _BasePulse._fire
 
 
-class TimePulse(_BasePulse):
-    def __init__(self, period: float | timedelta) -> None:
+class PeriodicPulse(_BasePulse):
+    """A pulse that fires periodically.
+
+    The pulse will fire every `interval` seconds, and will wait for `delay` seconds
+    before the first pulse is fired. This can be used to implement a periodic task,
+    and is different from asyncio's `loop.call_later` or `while True: await asyncio.sleep(x)`
+    in that it will not drift over time.
+    """
+
+    def __init__(
+        self,
+        period: float | timedelta,
+        start_delay: float | timedelta | None = None,
+    ) -> None:
+        """Create a periodic pulse.
+
+        Args:
+            period: The period of the pulse, in seconds or a timedelta.
+            start_delay: The delay before the first pulse is fired. If None, the first pulse
+                will be fired after `period` seconds. To fire the first pulse immediately,
+                pass 0.
+        """
         super().__init__()
         self._period = period if isinstance(period, float) else period.total_seconds()
-        self._start_time = self._loop.time()
+
         self._ticks = 0
-        self._loop.call_at(self._start_time + self._period, self._tick)
+
+        if start_delay is None:
+            self._start_delay = self._period
+        elif isinstance(start_delay, timedelta):
+            self._start_delay = start_delay.total_seconds()
+        else:
+            self._start_delay = start_delay
+
+        self._start_time = self._loop.time()
+        self._next_tick_handle = self._loop.call_at(
+            self._start_time + self._start_delay,
+            self._tick,
+        )
+        self._target_period: float | None = None
 
     def _tick(self) -> None:
+        if self._stopped.is_set():
+            return
+
         self._fire()
+
+        if self._target_period is not None:
+            self._period = self._target_period
+            self._target_period = None
+            self._ticks = 0
+            self._start_time = self._loop.time()
+            self._start_delay = 0
+
         self._ticks += 1
-        self._loop.call_at(self._start_time + self._period * self._ticks, self._tick)
+        self._next_tick_handle = self._loop.call_at(
+            when=self._start_time + self._period * self._ticks + self._start_delay,
+            callback=self._tick,
+        )
+
+    @property
+    def period(self) -> timedelta:
+        """The period of the pulse."""
+        return timedelta(seconds=self._period)
+
+    @period.setter
+    def period(self, period: float | timedelta) -> None:
+        self._target_period = period if isinstance(period, float) else period.total_seconds()
 
 
 if __name__ == "__main__":
@@ -97,9 +233,9 @@ if __name__ == "__main__":
         await asyncio.sleep(0.3)
         pulse.fire()
         await asyncio.sleep(0.3)
-        print("pulse1 finished")
+        pulse.stop()
 
-        time_pulse = TimePulse(0.25)
+        time_pulse = PeriodicPulse(0.25)
 
         async def show_time_pulses() -> None:
             async for t in time_pulse:
@@ -109,7 +245,7 @@ if __name__ == "__main__":
         for _ in range(3):
             asyncio.create_task(show_time_pulses())
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
 
         print("awaiting once", time.time())
         await time_pulse
@@ -118,5 +254,21 @@ if __name__ == "__main__":
         print("awaiting thrice", time.time())
         await time_pulse
         print("awaiting finished", time.time())
+        time_pulse.stop()
 
-    asyncio.run(main())
+    async def main_test_set_period() -> None:
+        t = time.time()
+        start_delay = 1 - divmod(t, 1)[1]  # start at the next second, for round numbers
+        await asyncio.sleep(start_delay)
+        pulse = PeriodicPulse(0.1, start_delay=0)
+        start_time = time.time()
+        print(f"start_time: {start_time}; period: {pulse.period}")
+        pulse.add_pulse_callback(lambda: print(f"pulse fired at t+{time.time()-start_time:3.5f}"))
+        await asyncio.sleep(1.3)
+        print("setting period to 0.5")
+        pulse.period = timedelta(seconds=0.5)
+        await asyncio.sleep(5)
+        pulse.stop()
+
+    asyncio.run(main_test_set_period())
+    # asyncio.run(main())
