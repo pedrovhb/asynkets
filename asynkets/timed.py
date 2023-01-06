@@ -6,24 +6,22 @@ import asyncio
 import textwrap
 from asyncio import Task
 from collections import deque
-from collections.abc import MutableSequence, Sequence
+from collections.abc import Sequence
 from datetime import timedelta
-from itertools import pairwise, islice
+from itertools import islice, pairwise
 from typing import (
+    AsyncIterable,
     Callable,
-    Generic,
-    TypeVar,
-    Iterable,
     Coroutine,
     Generator,
-    SupportsIndex,
+    Generic,
+    Iterable,
     overload,
-    cast,
-    Counter,
-    AsyncIterable,
+    SupportsIndex,
+    TypeVar,
 )
 
-from asynkets import Switch
+from .switch import Switch
 
 _T = TypeVar("_T")
 
@@ -62,7 +60,9 @@ class TimedDeque(Generic[_T], deque[_T]):
         super().__init__(maxlen=maxlen)
         self._loop = asyncio.get_event_loop()
 
-        self._period = period.total_seconds() if isinstance(period, timedelta) else period
+        self._period = (
+            period.total_seconds() if isinstance(period, timedelta) else period
+        )
         self._callbacks: list[_SyncFn[_T] | _AsyncFn[_T]] = callbacks or []
         self._pending_futs: dict[int, asyncio.Future[_T]] = {}
 
@@ -199,7 +199,9 @@ class TimeBucket(Generic[_T], Sequence[_T]):
         num_buckets: int,
         iterable: Iterable[_T] = (),
     ) -> None:
-        self._period = period.total_seconds() if isinstance(period, timedelta) else period
+        self._period = (
+            period.total_seconds() if isinstance(period, timedelta) else period
+        )
         self._empty = Switch(initial_state=True)
 
         self._loop = asyncio.get_event_loop()
@@ -209,7 +211,9 @@ class TimeBucket(Generic[_T], Sequence[_T]):
 
         for a, b in pairwise(self._buckets):
             a.add_callback(b.appendleft)
-        self._buckets[-1].add_callback(lambda _: self._empty.set() if len(self) == 0 else None)
+        self._buckets[-1].add_callback(
+            lambda _: self._empty.set() if len(self) == 0 else None
+        )
 
         for item in iterable:
             self.append(item)
@@ -272,7 +276,7 @@ class TimeBucket(Generic[_T], Sequence[_T]):
             self.append(item)
 
     def __repr__(self) -> str:
-        bucket_strs = []
+        bucket_strs: list[str] = []
         for i, bucket in enumerate(self._buckets):
             bucket_strs.append(f"T - {i * self._period}: {list(bucket)}")
             # todo - handle 0.30000000000000004
@@ -325,3 +329,6 @@ if __name__ == "__main__":
         )
 
     asyncio.run(main())
+
+
+__all__ = ("TimeBucket", "TimedDeque")

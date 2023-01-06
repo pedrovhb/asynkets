@@ -33,3 +33,6 @@ class Fuse:
             await fut
         finally:
             self._waiters.remove(fut)
+
+
+__all__ = ("Fuse",)

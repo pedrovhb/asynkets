@@ -96,3 +96,6 @@ class Switch:
 
     wait_toggled_on = partialmethod(wait_toggle_to, True)
     wait_toggled_off = partialmethod(wait_toggle_to, False)
+
+
+__all__ = ("Switch",)

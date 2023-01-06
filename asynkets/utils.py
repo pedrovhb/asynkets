@@ -2,37 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import (
-    ParamSpec,
-    cast,
-    TypeVar,
-    TYPE_CHECKING,
-    Coroutine,
-    overload,
-    Callable,
-)
+
+try:
+    from typing import ParamSpec
+except ImportError:
+    from typing_extensions import ParamSpec
+from typing import Callable, cast, Coroutine, TYPE_CHECKING, TypeVar
 
 _T = TypeVar("_T")
 _T_co = TypeVar("_T_co", covariant=True)
 
 
 _P = ParamSpec("_P")
-
-
-@overload
-def ensure_coroutine_function(
-    fn: Callable[_P, Coroutine[object, object, _T_co]],
-    to_thread: bool = ...,
-) -> Callable[_P, Coroutine[object, object, _T_co]]:
-    ...
-
-
-@overload
-def ensure_coroutine_function(
-    fn: Callable[_P, _T_co],
-    to_thread: bool = ...,
-) -> Callable[_P, Coroutine[object, object, _T_co]]:
-    ...
 
 
 def ensure_coroutine_function(
@@ -89,9 +70,9 @@ if __name__ == "__main__":
     my_sync_ensured = ensure_coroutine_function(my_sync_fn, to_thread=False)
     my_sync_ensured_to_thread = ensure_coroutine_function(my_sync_fn, to_thread=True)
 
-    reveal_type(my_async_ensured)
-    reveal_type(my_sync_ensured)
-    reveal_type(my_sync_ensured_to_thread)
+    # reveal_type(my_async_ensured)
+    # reveal_type(my_sync_ensured)
+    # reveal_type(my_sync_ensured_to_thread)
 
     async def main() -> None:
 
@@ -99,8 +80,12 @@ if __name__ == "__main__":
         b = await my_sync_ensured(4, [1, 3, 2])
         c = await my_sync_ensured_to_thread(4, [1, 3, 2])
 
-        reveal_type(a)  # asynkets/utils.py:94: note: Revealed type is "builtins.int"
-        reveal_type(b)  # asynkets/utils.py:95: note: Revealed type is "builtins.int"
-        reveal_type(c)  # asynkets/utils.py:96: note: Revealed type is "builtins.int"
+        print(a, b, c)
+
+        # reveal_type(a)  # asynkets/utils.py:94: note: Revealed type is "builtins.int"
+        # reveal_type(b)  # asynkets/utils.py:95: note: Revealed type is "builtins.int"
+        # reveal_type(c)  # asynkets/utils.py:96: note: Revealed type is "builtins.int"
 
     asyncio.run(main())
+
+__all__ = ("ensure_coroutine_function",)

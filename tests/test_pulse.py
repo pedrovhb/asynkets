@@ -1,6 +1,7 @@
-import pytest
 import asyncio
 from datetime import timedelta
+
+import pytest
 
 from asynkets import PeriodicPulse
 
@@ -24,6 +25,6 @@ async def test_periodic_pulse_with_count():
     counter = asyncio.create_task(iter_counter())
     assert periodic_pulse.period == timedelta(seconds=0.1)
 
-    await asyncio.sleep(0.3)
-    periodic_pulse.stop()
+    await asyncio.sleep(0.35)
+    periodic_pulse.close()
     assert await counter == 3

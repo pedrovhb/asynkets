@@ -19,6 +19,13 @@ bump2version = "^1.0.1"
 usort = "^1.0.5"
 flake8 = "^6.0.0"
 pyright = "^1.1.286"
+httpx = "^0.23.3"
+coverage = "^7.0.3"
+
+[tool.pyright]
+pythonVersion = "3.10"
+strict = ["./asynkets", "./examples"]
+
 
 [build-system]
 requires = ["poetry-core"]

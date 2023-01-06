@@ -40,10 +40,10 @@ def counter_no_max() -> EventfulCounter:
     ),
 )
 async def test_set(
-    max_val: float | None,
-    min_val: float | None,
+    max_val: int | None,
+    min_val: int | None,
     clamp: bool,
-    value: float,
+    value: int,
     mode: Literal["set", "inc", "dec", "iadd", "isub"],
 ) -> None:
     counter = EventfulCounter(
@@ -81,15 +81,15 @@ async def test_set(
     if clamp and max_val is not None:
         expected = min(expected, max_val)
 
-    assert float(counter) == expected
+    assert int(counter) == expected
     if min_val is not None:
         assert counter.min_value == min_val
-        assert counter.min_is_set() == (float(counter) <= float(min_val))
+        assert counter.min_is_set() == (int(counter) <= int(min_val))
     else:
         assert counter.min_is_set() is False
 
     if max_val is not None:
         assert counter.max_value == max_val
-        assert counter.max_is_set() == (float(counter) >= float(max_val))
+        assert counter.max_is_set() == (int(counter) >= int(max_val))
     else:
         assert counter.max_is_set() is False
