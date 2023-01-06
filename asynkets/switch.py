@@ -3,6 +3,19 @@ from functools import partialmethod
 
 
 class Switch:
+    """A switch that can be turned on or off, and allows waiting for a state change.
+
+    The switch can be in one of two states: on or off. It can be set to a specific state using the
+    set_state() method, or turned on using the set() method and turned off using the clear()
+    method. The current state of the switch can be checked using the is_set() and is_clear() methods.
+
+    The switch also provides async methods for waiting until it is in a specific state. The wait() and
+    wait_clear() methods can be used to wait until the switch is turned on or off, respectively. The
+    wait_for() method can be used to wait for the switch to be in a specific state, and the
+    wait_toggle(), wait_toggle_to(), wait_toggled_on(), and wait_toggled_off() methods can be
+    used to wait for the switch to change from one state to another.
+    """
+
     def __init__(self, initial_state: bool = False) -> None:
         super().__init__()
         self._ev_on = Event()
