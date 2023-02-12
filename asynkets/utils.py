@@ -18,11 +18,14 @@ _T_co = TypeVar("_T_co", covariant=True)
 
 _P = ParamSpec("_P")
 
+_A = TypeVar("_A")
+_B = TypeVar("_B")
+
 
 def ensure_coroutine_function(
-    fn: Callable[_P, _T_co] | Callable[_P, Coroutine[object, object, _T_co]],
+    fn: Callable[_P, _T_co] | Callable[_P, Coroutine[_A, _B, _T_co]],
     to_thread: bool = False,
-) -> Callable[_P, Coroutine[object, object, _T_co]]:
+) -> Callable[_P, Coroutine[_A, _B, _T_co]]:
     """Given a sync or async function, return an async function.
 
     Args:

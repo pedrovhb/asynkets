@@ -60,9 +60,7 @@ class TimedDeque(Generic[_T], deque[_T]):
         super().__init__(maxlen=maxlen)
         self._loop = asyncio.get_event_loop()
 
-        self._period = (
-            period.total_seconds() if isinstance(period, timedelta) else period
-        )
+        self._period = period.total_seconds() if isinstance(period, timedelta) else period
         self._callbacks: list[_SyncFn[_T] | _AsyncFn[_T]] = callbacks or []
         self._pending_futs: dict[int, asyncio.Future[_T]] = {}
 
@@ -199,9 +197,7 @@ class TimeBucket(Generic[_T], Sequence[_T]):
         num_buckets: int,
         iterable: Iterable[_T] = (),
     ) -> None:
-        self._period = (
-            period.total_seconds() if isinstance(period, timedelta) else period
-        )
+        self._period = period.total_seconds() if isinstance(period, timedelta) else period
         self._empty = Switch(initial_state=True)
 
         self._loop = asyncio.get_event_loop()
@@ -211,9 +207,7 @@ class TimeBucket(Generic[_T], Sequence[_T]):
 
         for a, b in pairwise(self._buckets):
             a.add_callback(b.appendleft)
-        self._buckets[-1].add_callback(
-            lambda _: self._empty.set() if len(self) == 0 else None
-        )
+        self._buckets[-1].add_callback(lambda _: self._empty.set() if len(self) == 0 else None)
 
         for item in iterable:
             self.append(item)

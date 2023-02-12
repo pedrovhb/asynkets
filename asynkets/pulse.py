@@ -5,7 +5,13 @@ import asyncio
 from asyncio import Future
 from collections import deque
 from datetime import timedelta
-from typing import AsyncIterator, Callable, cast, Coroutine, Generator, ParamSpec
+from functools import partial
+from typing import AsyncIterator, Callable, cast, Coroutine, Generator
+
+try:
+    from typing import ParamSpec
+except ImportError:
+    from typing_extensions import ParamSpec
 
 from .fuse import Fuse
 
@@ -22,40 +28,37 @@ class _BasePulse:
         self._value: float | None = None
         self._loop = asyncio.get_event_loop()
         self._closed = Fuse()
-        self._pulse_callbacks: list[
-            Callable[[float], object] | Callable[[], object]
-        ] = []
+        self._pulse_callbacks: list[Callable[[float], object] | Callable[[], object]] = []
 
     def add_pulse_callback(
         self,
         callback: Callable[_P, object],
         thread_safe: bool = False,
+        *__args: _P.args,
+        **__kwargs: _P.kwargs,
     ) -> None:
         """Add a callback to be called when the pulse is fired.
 
         If it is a coroutine, it will be scheduled as a task; otherwise, it will be scheduled
         via the event loop's call_soon method if thread_safe is False, or via call_soon_threadsafe
         if thread_safe is True.
-
-        No arguments are passed to the callback. If you need to pass arguments, use
-        functools.partial.
         """
 
         if asyncio.iscoroutinefunction(callback):
-            _fn = cast(Callable[[], Coroutine[object, object, object]], callback)
+            _fn = cast(Callable[_P, Coroutine[object, object, object]], callback)
 
             def _cb() -> None:
-                asyncio.create_task(_fn())
+                _ = asyncio.create_task(_fn(*__args, **__kwargs))
 
         elif thread_safe:
 
             def _cb() -> None:
-                self._loop.call_soon_threadsafe(callback)
+                self._loop.call_soon_threadsafe(partial(callback, *__args, **__kwargs))
 
         else:
 
             def _cb() -> None:
-                self._loop.call_soon(callback)
+                self._loop.call_soon(partial(callback, *__args, **__kwargs))
 
         self._pulse_callbacks.append(_cb)
 
@@ -212,9 +215,7 @@ class PeriodicPulse(_BasePulse):
                 pass 0.
         """
         super().__init__()
-        self._period = (
-            period.total_seconds() if isinstance(period, timedelta) else period
-        )
+        self._period = period.total_seconds() if isinstance(period, timedelta) else period
 
         self._ticks = 0
 
@@ -258,9 +259,7 @@ class PeriodicPulse(_BasePulse):
 
     @period.setter
     def period(self, period: float | timedelta) -> None:
-        self._target_period = (
-            period if isinstance(period, float) else period.total_seconds()
-        )
+        self._target_period = period if isinstance(period, float) else period.total_seconds()
 
 
 if __name__ == "__main__":
@@ -312,9 +311,7 @@ if __name__ == "__main__":
 
         async def main_test_set_period() -> None:
             t = time.time()
-            start_delay = (
-                1 - divmod(t, 1)[1]
-            )  # start at the next second, for round numbers
+            start_delay = 1 - divmod(t, 1)[1]  # start at the next second, for round numbers
             # await asyncio.sleep(start_delay)
             pulse = PeriodicPulse(0.1, start_delay=start_delay)
             start_time = time.time()

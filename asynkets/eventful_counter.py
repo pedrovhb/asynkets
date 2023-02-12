@@ -26,7 +26,7 @@ class EventfulCounter(SupportsInt):
 
     This class inherits from SupportsFloat, which means it can be cast to a
     int using the int() function. It also supports comparison using the
-    >, <, and == operators. It can be cast to a boolean using the
+    `>`, `<`, and `==` operators. It can be cast to a boolean using the
     bool() function, which returns True if the counter has a value greater
     than 0.
 

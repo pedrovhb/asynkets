@@ -1,9 +1,14 @@
+import asyncio 
 import pytest
 
-from asynkets import EventfulCounter
 from hypothesis import given, strategies as st
 from hypothesis.stateful import invariant, precondition, rule, RuleBasedStateMachine
 from hypothesis.strategies import DrawFn
+from asynkets import EventfulCounter
+
+from timeless_loop import TimelessEventLoopPolicy
+
+asyncio.set_event_loop_policy(TimelessEventLoopPolicy(raise_on_deadlock=True))
 
 
 @st.composite
